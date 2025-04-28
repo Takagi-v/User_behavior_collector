@@ -62,6 +62,7 @@ except ImportError:
 try:
     import win32gui
     import win32process
+    import win32con
     has_win32 = True
 except ImportError:
     missing_modules.append(("pywin32", "pip install pywin32"))
@@ -113,7 +114,9 @@ class UserBehaviorCollector(tk.Tk):
         "删除": ["键盘-特殊键：Delete", "键盘-特殊键：Backspace"],
         "查看": ["截图：窗口切换", "窗口-状态：最小化", "窗口-状态：最大化", "窗口-状态：关闭",
                 "键盘-特殊键：↑", "键盘-特殊键：↓", "键盘-特殊键：←", "键盘-特殊键：→",
-                "键盘-特殊键：PageUp", "键盘-特殊键：PageDown", "鼠标-滚轮：向上", "鼠标-滚轮：向下",
+                "键盘-特殊键：PageUp", "键盘-特殊键：PageDown",
+                "鼠标-滚轮：向上滑动", "鼠标-滚轮：向下滑动",
+                "鼠标-拖拽：完成",
                 "鼠标-拖拽：滚动条"],
         "输入": ["键盘-输入：*", "键盘-特殊键：Space", "键盘-特殊键：Enter"],
         "点击": ["鼠标-单击：左键", "鼠标-单击：右键", "鼠标-双击：左键", "鼠标-双击：右键"],
@@ -185,7 +188,11 @@ class UserBehaviorCollector(tk.Tk):
         button_frame.grid(row=4, column=0, columnspan=2, pady=10)
         self.start_button = ttk.Button(button_frame, text="启用监控", command=self.start_monitoring)
         self.start_button.pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="重置", command=self.reset).pack(side=tk.LEFT, padx=5)
+        # 将重置按钮保存为实例变量
+        self.reset_button = ttk.Button(button_frame, text="重置", command=self.reset)
+        self.reset_button.pack(side=tk.LEFT, padx=5)
+        # 初始化时没有保存按钮
+        self.save_button = None
         
         # 日志显示区域
         log_frame = ttk.LabelFrame(main_frame, text="操作日志")
@@ -219,23 +226,28 @@ class UserBehaviorCollector(tk.Tk):
     
     def reset(self):
         """重置所有输入并停止监控"""
-        # 如果正在监控，先停止
+        # 如果正在监控，先停止 - 这个逻辑移除，因为重置按钮在监控时不可见
+        # if self.monitoring:
+        #     self.stop_monitoring()
+
+        # 重置按钮只应在非监控状态下可用，直接执行重置操作
         if self.monitoring:
-            self.stop_monitoring()
-        
+             self.log_activity("错误：监控进行中无法重置。", error=True)
+             return
+
         # 重置输入项
         self.student_id.set("")
         self.name.set("")
         self.storage_path.set(os.path.join(os.path.expanduser("~"), "Desktop"))
-        
-        # 重置界面
-        self.start_button.config(text="启用监控", command=self.start_monitoring)
-        
-        # 移除保存按钮
-        if hasattr(self, 'save_button') and self.save_button.winfo_exists():
-            self.save_button.destroy()
-        
-        self.log_activity("已重置所有设置")
+
+        # 重置界面 - 这部分也不需要了，因为按钮状态由 start/stop 控制
+        # self.start_button.config(text="启用监控", command=self.start_monitoring)
+
+        # 移除保存按钮 - 这部分也不需要了
+        # if hasattr(self, 'save_button') and self.save_button.winfo_exists():
+        #     self.save_button.destroy()
+
+        self.log_activity("输入已重置")
     
     def validate_inputs(self):
         """验证输入的合法性"""
@@ -292,15 +304,22 @@ class UserBehaviorCollector(tk.Tk):
         
         # 修改界面
         self.start_button.config(text="暂停", command=self.toggle_pause)
-        
+        # 隐藏重置按钮
+        self.reset_button.pack_forget()
+
         # 获取父框架
         button_frame = self.start_button.master
-        
+
         # 添加保存按钮 - 确保它位于正确的框架中
-        if not hasattr(self, 'save_button') or not self.save_button.winfo_exists():
-            self.save_button = ttk.Button(button_frame, text="保存", command=self.confirm_save)
-            self.save_button.pack(side=tk.LEFT, padx=5)
-            button_frame.update_idletasks()  # 强制更新布局
+        # if not hasattr(self, 'save_button') or not self.save_button.winfo_exists():
+        # 销毁可能存在的旧保存按钮 (以防万一)
+        if self.save_button and self.save_button.winfo_exists():
+            self.save_button.destroy()
+            
+        self.save_button = ttk.Button(button_frame, text="保存", command=self.confirm_save)
+        # 将保存按钮放在重置按钮原来的位置
+        self.save_button.pack(side=tk.LEFT, padx=5)
+        button_frame.update_idletasks()  # 强制更新布局
         
         # 调整窗口位置和大小
         self.geometry("350x350+0+0")
@@ -387,13 +406,19 @@ class UserBehaviorCollector(tk.Tk):
         
         self.log_activity("监控已停止")
         
-        # 恢复��钮状态
+        # 恢复按钮状态
         self.start_button.config(text="启用监控", command=self.start_monitoring)
         
-        # 移除保存按钮（如果存在）
-        if hasattr(self, 'save_button') and self.save_button.winfo_exists():
-            self.save_button.destroy()
-            delattr(self, 'save_button')
+        # 移除保存按钮（如果存在）并显示重置按钮
+        if self.save_button and self.save_button.winfo_exists():
+            self.save_button.pack_forget() # 或者 self.save_button.destroy()
+        # if hasattr(self, 'save_button') and self.save_button.winfo_exists():
+        #     self.save_button.destroy()
+        #     delattr(self, 'save_button')
+
+        # 重新显示重置按钮
+        if hasattr(self, 'reset_button') and self.reset_button:
+             self.reset_button.pack(side=tk.LEFT, padx=5)
     
     def on_mouse_enter(self, event):
         """鼠标进入窗口"""
@@ -605,23 +630,29 @@ class UserBehaviorCollector(tk.Tk):
     
     def mouse_listener(self):
         """鼠标事件监听线程"""
+        # 拖拽状态跟踪
+        is_dragging = False
+        drag_start_pos = None
+        last_wheel_time = time.time()
+        wheel_cooldown = 0.4  # 防止滚轮事件过于频繁的冷却时间(秒)
         # 鼠标点击事件
         def on_click(event=None, *args, **kwargs):
+            nonlocal is_dragging, drag_start_pos # 声明使用外部变量
             # 如果暂停状态，不记录
             if self.paused:
                 return
-            
+
             # 处理不同调用方式
             # 1. 通过hook函数调用时，传递event对象
             # 2. 通过on_click函数调用时，传递x, y, button, pressed参数
             if event is None and len(args) >= 3:
-                # on_click方式的调用
+                # on_click方式的调用 (这种方式似乎不再使用，但保留以防万一)
                 x, y, button, pressed = args[0], args[1], args[2], args[3] if len(args) > 3 else False
-                
+
                 # 仅记录释放事件
                 if pressed:
                     return
-                
+
                 # 确定按钮类型
                 if hasattr(mouse, 'LEFT') and button == mouse.LEFT:
                     button_name = "左键"
@@ -629,48 +660,139 @@ class UserBehaviorCollector(tk.Tk):
                     button_name = "右键"
                 else:
                     button_name = "左键" if str(button).lower() == "left" else "右键" if str(button).lower() == "right" else "中键"
+
+                # 直接记录单击 (因为旧的on_click没有拖拽逻辑)
+                operation_detail = f"鼠标-单击：{button_name}"
+                try:
+                    window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
+                except:
+                    window_title = "未知窗口"
+                self.log_window_event(window_title, "NORMAL", operation_detail)
+
             else:
                 # hook方式的调用
-                # 仅记录释放事件
-                if hasattr(event, 'event_type') and event.event_type != 'up':
-                    return
-                
+                # 获取事件类型和按钮
+                event_type = event.event_type if hasattr(event, 'event_type') else None
+                button = event.button if hasattr(event, 'button') else None
+
                 # 确定鼠标按钮
                 button_name = "左键"
-                if hasattr(event, 'button'):
-                    if event.button == 'right':
-                        button_name = "右键"
-                    elif event.button == 'middle':
-                        button_name = "中键"
-            
-            # 记录事件
-            operation_detail = f"鼠标-单击：{button_name}"
-            
-            try:
-                window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
-            except:
-                window_title = "未知窗口"
+                if button == 'right':
+                    button_name = "右键"
+                elif button == 'middle':
+                    button_name = "中键"
+
+                # --- 拖拽逻辑 --- 
+                if event_type == 'down' and button_name == '左键':
+                    is_dragging = True
+                    # 使用 mouse.get_position() 获取坐标
+                    try:
+                        drag_start_pos = mouse.get_position()
+                    except Exception as e:
+                        self.log_activity(f"获取鼠标位置失败: {e}", error=True)
+                        drag_start_pos = None
+                    return False # 按下事件不记录，等待释放
+
+                elif event_type == 'up':
+                    if button_name == "左键" and is_dragging:
+                        is_dragging = False
+                        # 使用 mouse.get_position() 获取坐标
+                        try:
+                            drag_end_pos = mouse.get_position()
+                        except Exception as e:
+                            self.log_activity(f"获取鼠标位置失败: {e}", error=True)
+                            drag_end_pos = None
+                        
+                        # 检查位移量
+                        if drag_start_pos and drag_end_pos and (abs(drag_start_pos[0] - drag_end_pos[0]) > 5 or abs(drag_start_pos[1] - drag_end_pos[1]) > 5):
+                            operation_detail = f"鼠标-拖拽：完成"
+                            try:
+                                window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
+                            except:
+                                window_title = "未知窗口"
+                            self.log_window_event(window_title, "NORMAL", operation_detail)
+                            drag_start_pos = None # 重置起始位置
+                            return False # 拖拽事件已处理，不再作为单击记录
+                        else:
+                             # 如果位移很小，视为单击
+                             operation_detail = f"鼠标-单击：{button_name}"
+                             try:
+                                 window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
+                             except:
+                                 window_title = "未知窗口"
+                             self.log_window_event(window_title, "NORMAL", operation_detail)
+                             drag_start_pos = None # 重置起始位置
+                             return False # 单击事件已处理
+
+                    # 如果不是左键释放，或者是左键释放但未处于拖拽状态（理论上不应发生，但作为保险）
+                    # 或者拖拽位移很小被判断为单击 (上面已处理)
+                    # 则记录为普通单击 (除左键外)
+                    elif button_name != "左键":
+                        operation_detail = f"鼠标-单击：{button_name}"
+                        try:
+                            window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
+                        except:
+                            window_title = "未知窗口"
+                        self.log_window_event(window_title, "NORMAL", operation_detail)
+                        return False # 非左键单击事件已处理
+
+                    # 重置拖拽起始位置，以防万一
+                    drag_start_pos = None
+                    is_dragging = False # 确保拖拽状态复位
                 
-            self.log_window_event(window_title, "NORMAL", operation_detail)
+                # 其他事件类型 (非 down/up) 不在此处理
+
             return False  # 不拦截事件
         
         # 滚轮事件监听函数
         def on_wheel(event=None, *args, **kwargs):
+            nonlocal last_wheel_time
+            
             # 如果暂停状态，不记录
             if self.paused:
-                return
+                return False
             
-            # 处理不同调用方式
+            # 添加冷却时间检查，防止滚轮事件过度记录
+            current_time = time.time()
+            if current_time - last_wheel_time < wheel_cooldown:
+                return False
+            
+            last_wheel_time = current_time
+            
+            # 处理不同调用方式并确定滚动方向
+            direction = None
+            
             if event is None and len(args) >= 3:
                 # on_scroll方式的调用 (x, y, dx, dy)
-                x, y, dx, dy = args[0], args[1], args[2], args[3] if len(args) > 3 else 0
-                direction = "向上" if dy > 0 else "向下"
+                try:
+                    x, y, dx, dy = args[0], args[1], args[2], args[3] if len(args) > 3 else 0
+                    direction = "向上" if dy > 0 else "向下" if dy < 0 else None
+                except Exception as e:
+                    self.log_activity(f"滚轮事件参数解析失败: {e}", error=True)
             else:
-                # hook方式的调用
-                direction = "向上" if hasattr(event, 'delta') and event.delta > 0 else "向下"
+                # hook方式的调用 - 适应多种可能的属性名
+                try:
+                    # 检查多种可能的属性名
+                    if hasattr(event, 'delta'):
+                        wheel_value = event.delta
+                    elif hasattr(event, 'wheel_delta'):
+                        wheel_value = event.wheel_delta
+                    elif hasattr(event, 'y'):
+                        wheel_value = event.y  # 有些库使用y属性表示垂直滚动
+                    else:
+                        # 尝试从args中获取
+                        wheel_value = args[3] if len(args) > 3 else 0
+                    
+                    direction = "向上" if wheel_value > 0 else "向下" if wheel_value < 0 else None
+                except Exception as e:
+                    self.log_activity(f"无法确定滚轮方向: {e}", error=True)
+            
+            # 如果无法确定方向，则跳过记录
+            if direction is None:
+                return False
             
             # 记录事件
-            operation_detail = f"鼠标-滚轮：{direction}"
+            operation_detail = f"鼠标-滚轮：{direction}滑动"
             
             try:
                 window_title = gw.getActiveWindow().title if gw.getActiveWindow() else "未知窗口"
@@ -682,12 +804,25 @@ class UserBehaviorCollector(tk.Tk):
         
         # 通用鼠标事件处理函数
         def generic_mouse_hook(event):
+            nonlocal is_dragging # 声明使用外部变量
+            
+            # 更健壮的事件类型检测
             if hasattr(event, 'event_type'):
-                if event.event_type in ['up', 'down']:
+                event_type = event.event_type
+                if event_type in ['up', 'down']:
                     return on_click(event)
-                elif event.event_type == 'wheel':
+                elif event_type == 'wheel':
                     return on_wheel(event)
-            return False
+                elif event_type == 'move':
+                    # 如果正在拖拽 (左键按下状态)，则忽略移动事件本身
+                    if is_dragging:
+                        return False
+            # 尝试使用其他方式检测滚轮事件
+            elif hasattr(event, 'delta') or hasattr(event, 'wheel_delta') or \
+                (hasattr(event, 'y') and not hasattr(event, 'x')): # 仅y属性可能是滚轮
+                return on_wheel(event)
+            
+            return False  # 允许事件传递
         
         # 尝试使用不同方法注册鼠标事件
         try:
@@ -750,55 +885,118 @@ class UserBehaviorCollector(tk.Tk):
         """窗口事件监听线程"""
         last_window_title = None
         last_window_state = None
-        
+        last_window_handle = None  # 跟踪上一个窗口句柄
+
         current_thread = threading.current_thread()
         while not getattr(current_thread, "stop_flag", False):
             if self.paused:
                 time.sleep(0.5)
                 continue
-            
+
+            current_title = None
+            current_state = None
+            current_handle = None
+
             try:
-                # 获取当前活动窗口
-                current_window = gw.getActiveWindow()
-                
-                if current_window:
-                    current_title = current_window.title
-                    
-                    # 检测窗口状态
-                    try:
-                        if current_window.isMaximized:
-                            current_state = "MAXIMIZED"
-                        elif current_window.isMinimized:
+                # 优先使用 win32gui 获取前景窗口句柄
+                if has_win32:
+                    current_handle = win32gui.GetForegroundWindow()
+                    if current_handle:
+                        current_title = win32gui.GetWindowText(current_handle)
+                        # 使用 win32gui 判断状态
+                        placement = win32gui.GetWindowPlacement(current_handle)
+                        window_state_flag = placement[1] # 获取状态标志
+
+                        if win32gui.IsIconic(current_handle): # IsIconic 用于检测最小化
                             current_state = "MINIMIZED"
+                        # elif win32gui.IsZoomed(current_handle): # IsZoomed 用于检测最大化
+                        elif window_state_flag == win32con.SW_SHOWMAXIMIZED: # 使用 GetWindowPlacement 判断最大化
+                            current_state = "MAXIMIZED"
                         else:
                             current_state = "NORMAL"
-                    except:
-                        current_state = "NORMAL"  # 默认状态
-                    
-                    # 窗口切换检测
-                    if last_window_title is None or last_window_title != current_title:
-                        # 窗口切换，记录事件并截图
+                    else:
+                        # 没有前景窗口 (可能桌面获得焦点或所有窗口最小化)
+                        current_title = "桌面/无活动窗口"
+                        current_state = "NORMAL" # 或者定义一个特定状态？
+                else:
+                    # win32gui 不可用时，回退到 pygetwindow (可能不准)
+                    current_window = gw.getActiveWindow()
+                    if current_window:
+                        current_handle = getattr(current_window, '_hWnd', None) # 尝试获取句柄
+                        current_title = current_window.title
+                        try:
+                            if current_window.isMaximized:
+                                current_state = "MAXIMIZED"
+                            # pygetwindow 的 isMinimized 可能不准确
+                            # elif current_window.isMinimized:
+                            #     current_state = "MINIMIZED"
+                            else:
+                                current_state = "NORMAL"
+                        except:
+                             current_state = "NORMAL"
+                    else:
+                        current_title = "桌面/无活动窗口"
+                        current_state = "NORMAL"
+
+                # --- 逻辑判断 --- 
+
+                # 1. 窗口句柄发生变化 (窗口切换)
+                if current_handle != last_window_handle:
+                    # 检查上一个窗口的最终状态 (如果存在)
+                    if last_window_handle and has_win32:
+                        try:
+                            # 检查上一个窗口的最终状态
+                            last_placement = win32gui.GetWindowPlacement(last_window_handle)
+                            last_window_state_flag = last_placement[1]
+
+                            if win32gui.IsIconic(last_window_handle):
+                                final_last_state = "MINIMIZED"
+                            # elif win32gui.IsZoomed(last_window_handle):
+                            elif last_window_state_flag == win32con.SW_SHOWMAXIMIZED:
+                                final_last_state = "MAXIMIZED"
+                            else:
+                                final_last_state = "NORMAL"
+                            
+                            # 如果记录的最后状态与实际最终状态不同，补记一条
+                            if last_window_state != final_last_state:
+                                # 特别是记录最小化事件
+                                operation_detail = f"窗口-状态：{final_last_state}"
+                                self.log_window_event(last_window_title, final_last_state, operation_detail)
+                                last_window_state = final_last_state # 更新状态记录
+                        except win32gui.error: # 句柄可能已失效
+                            pass 
+                            
+                    # 记录窗口切换事件并截图
+                    if current_title and current_title != "桌面/无活动窗口": # 仅在切换到实际窗口时截图
                         try:
                             self.take_screenshot("窗口切换")
                         except Exception as e:
                             self.log_activity(f"窗口切换截图失败: {str(e)}", error=True)
-                        
-                        # 记录窗口状态变化
-                        last_window_title = current_title
                     
-                    # 窗口状态变化检测
-                    elif last_window_state is not None and last_window_state != current_state:
-                        # 窗口状态变化，记录事件
-                        operation_detail = f"窗口-状态：{current_state}"
+                    # 记录新窗口的信息 (如果不是桌面)
+                    if current_title != "桌面/无活动窗口":
+                        operation_detail = f"窗口-切换至：{current_title}"
                         self.log_window_event(current_title, current_state, operation_detail)
                     
+                    # 更新记录
+                    last_window_handle = current_handle
+                    last_window_title = current_title
                     last_window_state = current_state
+
+                # 2. 窗口句柄未变，但状态发生变化 (同一窗口状态改变)
+                elif current_handle is not None and current_state != last_window_state:
+                     # 记录状态变化
+                     operation_detail = f"窗口-状态：{current_state}"
+                     self.log_window_event(current_title, current_state, operation_detail)
+                     last_window_state = current_state # 更新状态记录
+
             except Exception as e:
                 self.log_activity(f"窗口监听错误: {str(e)}", error=True)
                 # 重置状态，避免连续错误
+                last_window_handle = None
                 last_window_title = None
                 last_window_state = None
-            
+
             # 每隔0.5秒检测一次
             time.sleep(0.5)
     
@@ -964,12 +1162,38 @@ class UserBehaviorCollector(tk.Tk):
             
             # 准备CSV数据
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
-            # 获取剪贴板内容
+
+            # 操作类型映射 - 移到前面，以便后面判断剪贴板
+            operation_type = "其他"  # 默认操作类型
+            for op_type, patterns in self.OPERATION_MAPPING.items():
+                # 优化匹配逻辑：优先完全匹配，其次前缀匹配
+                if operation_detail in patterns:
+                    operation_type = op_type
+                    break
+                elif any(operation_detail.startswith(p.replace('*', '')) for p in patterns if '*' in p):
+                     operation_type = op_type
+                     break
+                # 保留原来的模糊匹配作为后备，但可能不太精确
+                elif any(pattern in operation_detail for pattern in patterns if '*' not in pattern):
+                    operation_type = op_type
+                    # 注意：这里如果匹配到多个，可能取第一个匹配到的，不一定最准确
+                    # break # 暂时不break，看看是否有更精确的匹配
+
+            # 获取剪贴板内容 - 根据 operation_type 判断
             clipboard_content = ""
-            if any(keyword in operation_detail for keyword in ["复制", "剪贴", "粘贴"]):
+            # if any(keyword in operation_detail for keyword in ["复制", "剪贴", "粘贴"]):
+            if operation_type in ["复制", "剪贴", "粘贴"]:
                 try:
-                    clip_text = pyperclip.paste()
+                    # 增加超时和重试机制，提高稳定性
+                    for _ in range(3): # 重试3次
+                        try:
+                            clip_text = pyperclip.paste()
+                            if clip_text is not None: # 确保获取到内容
+                                break # 成功获取，跳出重试
+                        except pyperclip.PyperclipTimeoutException:
+                            time.sleep(0.1) # 超时稍等重试
+                            clip_text = None
+                    
                     if clip_text:
                         # 格式化剪贴板内容: 【字数】内容（来源：窗口标签）
                         text_len = len(clip_text)
@@ -979,16 +1203,22 @@ class UserBehaviorCollector(tk.Tk):
                         else:
                             formatted_content = f"【{text_len}】{clip_text}（来源：{window_core_title}）"
                         clipboard_content = formatted_content
-                except:
-                    clipboard_content = "无法获取剪贴板内容"
+                except Exception as e: # 捕获更广泛的异常
+                    clipboard_content = f"无法获取剪贴板内容: {e}"
             
-            # 操作类型映射
-            operation_type = "其他"  # 默认操作类型
-            for op_type, patterns in self.OPERATION_MAPPING.items():
-                if any(pattern in operation_detail for pattern in patterns) or any(pattern.startswith(operation_detail) for pattern in patterns):
-                    operation_type = op_type
-                    break
-            
+            # 准备截图文件的超链接 (如果存在)
+            hyperlink_value = ""
+            if screenshot_filename:
+                try:
+                    # 获取截图文件的绝对路径
+                    full_screenshot_path = os.path.abspath(os.path.join(self.screenshots_folder, screenshot_filename))
+                    # 构造 Excel 超链接公式 (注意路径中的反斜杠可能需要转义，但Excel通常能处理)
+                    # Excel 需要双引号包围参数
+                    hyperlink_value = f'=HYPERLINK("{full_screenshot_path}", "{screenshot_filename}")'
+                except Exception as e:
+                    self.log_activity(f"创建截图超链接失败: {e}", error=True)
+                    hyperlink_value = screenshot_filename # 如果失败，则只写入文件名
+
             # 准备数据行
             data_row = [
                 self.student_id.get(),
@@ -1000,7 +1230,8 @@ class UserBehaviorCollector(tk.Tk):
                 window_core_title,
                 window_state,
                 clipboard_content,
-                screenshot_filename or ""
+                # screenshot_filename or ""
+                hyperlink_value # 使用构造好的超链接或空字符串
             ]
             
             # 写入CSV
@@ -1041,9 +1272,11 @@ class UserBehaviorCollector(tk.Tk):
     def write_to_csv(self, data):
         """写入数据到CSV文件"""
         try:
+            # 确保所有数据元素都是字符串，以防万一
+            string_data = [str(item) if item is not None else "" for item in data]
             with open(self.csv_filepath, 'a', newline='', encoding='utf-8-sig') as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(data)
+                writer.writerow(string_data) # 写入字符串列表
         except Exception as e:
             self.log_activity(f"错误：无法写入CSV文件 - {str(e)}", error=True)
 

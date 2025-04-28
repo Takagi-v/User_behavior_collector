@@ -1,4 +1,7 @@
 @echo off
+REM Change directory to the script's location
+pushd "%~dp0"
+
 chcp 65001 > nul
 echo Starting user behavior collector...
 
@@ -11,66 +14,29 @@ if not exist venv (
 )
 
 REM Activate virtual environment
+echo Activating virtual environment...
 call venv\Scripts\activate
 
-REM Check and install missing dependencies before running
-echo Checking dependencies...
-venv\Scripts\python.exe -c "import PIL" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: Pillow...
-  venv\Scripts\pip.exe install --only-binary=:all: Pillow
-)
-
-venv\Scripts\python.exe -c "import psutil" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: psutil...
-  venv\Scripts\pip.exe install --only-binary=:all: psutil
-)
-
-venv\Scripts\python.exe -c "import pygetwindow" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: PyGetWindow...
-  venv\Scripts\pip.exe install --only-binary=:all: PyGetWindow
-)
-
-venv\Scripts\python.exe -c "import pyautogui" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: PyAutoGUI...
-  venv\Scripts\pip.exe install --only-binary=:all: PyAutoGUI
-)
-
-venv\Scripts\python.exe -c "import keyboard" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: keyboard...
-  venv\Scripts\pip.exe install --only-binary=:all: keyboard
-)
-
-venv\Scripts\python.exe -c "import mouse" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: mouse...
-  venv\Scripts\pip.exe install --only-binary=:all: mouse
-)
-
-venv\Scripts\python.exe -c "import pyperclip" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: pyperclip...
-  venv\Scripts\pip.exe install --only-binary=:all: pyperclip
-)
-
-venv\Scripts\python.exe -c "import win32gui" 2>nul
-if %errorlevel% neq 0 (
-  echo Installing missing dependency: pywin32...
-  venv\Scripts\pip.exe install pywin32==306
-)
-
-echo All dependencies checked and installed.
+REM Optional: Check if activation was successful by checking the Python executable path
+REM python -c "import sys; print(sys.executable)" | findstr /I /C:"\\venv\\Scripts\\python.exe" > nul
+REM if %errorlevel% neq 0 (
+REM   echo Error: Failed to activate the virtual environment correctly.
+REM   pause
+REM   exit /b 1
+REM )
 
 REM Run the application
 echo Running program with virtual environment Python...
 venv\Scripts\python.exe main.py
 
-REM Deactivate environment when done
-call deactivate
+REM Deactivate environment when done (optional, script will exit anyway)
+REM call deactivate
 
-echo Program has exited
-pause 
+echo.
+echo Program has exited.
+
+REM Return to the original directory (optional but good practice)
+popd
+
+pause
+exit /b 0 

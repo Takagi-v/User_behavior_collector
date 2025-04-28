@@ -134,6 +134,7 @@ OPERATION_MAPPING = {
 
 3.2.3【透明化规则】鼠标焦点离开窗口时，窗口透明度逐渐调整为 30%，仅首行文字和按钮保持不透明。鼠标移回窗口时，恢复 100% 不透明度，展开完整日志区。
 
+
 初始化界面
 
 - ![image](https://api2.mubu.com/v3/document_image/7834162_bce5a671-cee0-47dc-8c6f-e6fbeb9ed67f.png)
